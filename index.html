@@ -1,0 +1,436 @@
+<title>강 건너 거리 재기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: AlgeoMath-style board (toolbar + canvas) on the left, a slim mission panel on the right; stacks on phones. */
+:root{
+  --bg:#eef1f5; --panel:#ffffff; --fg:#1d2733; --muted:#66727f; --line:#d5dbe3;
+  --accent:#2f6fed; --accent-soft:#e3ecfd; --ok:#1d9a57; --ok-soft:#e1f5e9; --warn:#e8742c;
+  --water:#bfe0f5; --water-deep:#8dc3e8; --land:#e6eed6; --land-far:#dfe9cf; --grid:rgba(20,40,70,.08);
+  --ink:#334155; --circle:#8a5cf5;
+  --font:"Noto Sans KR",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#141a22; --panel:#1c2430; --fg:#e7ecf3; --muted:#9aa6b5; --line:#2e3946;
+  --accent:#6b98ff; --accent-soft:#233356; --ok:#3ccf7a; --ok-soft:#1b3a2a; --warn:#f29352;
+  --water:#1f3b55; --water-deep:#2b5a80; --land:#1f2a1c; --land-far:#1b2519; --grid:rgba(255,255,255,.08);
+  --ink:#d6dde8; --circle:#b79cff; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#141a22; --panel:#1c2430; --fg:#e7ecf3; --muted:#9aa6b5; --line:#2e3946;
+  --accent:#6b98ff; --accent-soft:#233356; --ok:#3ccf7a; --ok-soft:#1b3a2a; --warn:#f29352;
+  --water:#1f3b55; --water-deep:#2b5a80; --land:#1f2a1c; --land-far:#1b2519; --grid:rgba(255,255,255,.08);
+  --ink:#d6dde8; --circle:#b79cff; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.5}
+.wrap{padding-block:14px 24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin-bottom:10px}
+header h1{font-size:20px;font-weight:700;margin:0;text-wrap:balance}
+header .sub{color:var(--muted);font-size:13px}
+header .sub b{color:var(--accent);font-weight:700}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start}
+@media (max-width:820px){.main{grid-template-columns:1fr}}
+
+.board{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
+.toolbar{display:flex;flex-wrap:wrap;gap:4px;padding:8px;border-bottom:1px solid var(--line);background:var(--panel)}
+.toolbar .sep{width:1px;background:var(--line);margin:4px 4px}
+.tool{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:58px;padding:6px 6px 4px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--fg);font:inherit;font-size:11.5px;cursor:pointer}
+.tool svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tool:hover{background:var(--accent-soft)}
+.tool:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.tool.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tool.ghost{color:var(--muted)}
+.canvas-wrap{position:relative;width:100%;aspect-ratio:180/118;max-width:100%}
+canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.status{display:flex;justify-content:space-between;gap:10px;padding:7px 12px;border-top:1px solid var(--line);font-size:13px;color:var(--muted);min-height:34px}
+.status b{color:var(--accent);font-weight:700}
+
+.panel{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:700}
+.mission p{margin:0 0 6px}
+.mission .q{font-size:16px;font-weight:700;margin-top:8px;text-wrap:balance}
+.mission .q span{color:var(--accent)}
+.goal{background:var(--accent);color:#fff;border-radius:10px;padding:16px 16px 14px}
+.goal .eyebrow{font-size:11px;letter-spacing:.1em;opacity:.85;font-weight:700}
+.goaltitle{margin:4px 0 8px;font-size:21px;line-height:1.3;font-weight:700;text-wrap:balance}
+.goaltitle span{background:rgba(255,255,255,.22);padding:0 6px;border-radius:5px}
+.goal .scene{display:block;width:100%;height:auto;border-radius:8px;margin:8px 0}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips span{background:rgba(255,255,255,.18);border-radius:999px;padding:2px 9px;font-size:12px;font-weight:500}
+.prog{font-weight:500;color:var(--muted);letter-spacing:0;text-transform:none;margin-left:6px;font-variant-numeric:tabular-nums}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:26px 1fr;gap:8px;align-items:start;padding:8px 10px;border-radius:8px;border:1px solid var(--line);color:var(--muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:12px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.step .t{font-weight:700;font-size:14px;line-height:26px}
+.step.done{border-color:var(--ok);background:var(--ok-soft)}
+.step.done .n{background:var(--ok);color:#fff}
+.step.done .t{color:var(--fg)}
+.step.cur{border:2px solid var(--accent);background:var(--panel);color:var(--fg);padding:10px 12px}
+.step.cur .n{background:var(--accent);color:#fff}
+.step.cur .t{font-size:16px}
+.step .body{display:none;grid-column:2;}
+.step.cur .body{display:block}
+.step .desc{font-size:13px;margin:2px 0 8px;color:var(--muted)}
+.todo{display:flex;flex-direction:column;gap:5px}
+.todo .row{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:13px}
+.todo .tl{background:var(--accent);color:#fff;border-radius:5px;padding:1px 7px;font-size:12px;font-weight:700}
+.todo .pt{background:var(--accent-soft);color:var(--fg);border-radius:5px;padding:1px 7px;font-weight:700;font-variant-numeric:tabular-nums}
+.todo .arrow{color:var(--muted)}
+.todo .note{font-size:12px;color:var(--muted)}
+.result{display:none;border:1px solid var(--ok);background:var(--ok-soft);border-radius:10px;padding:12px 14px}
+.result.show{display:block}
+.result .big{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.result .why{font-size:12.5px;color:var(--muted);margin-top:4px}
+.btnrow{display:flex;flex-wrap:wrap;gap:6px}
+.btn{font:inherit;font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{color:#fff;filter:brightness(1.07)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.demo .cap{font-size:12.5px;color:var(--muted);margin-top:8px;min-height:18px}
+@media (prefers-reduced-motion:no-preference){ .step{transition:background .2s,border-color .2s} }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>똑같은 삼각형을 땅에 옮겨 그려서, 강 건너 짚라인 줄 길이 구하기</h1>
+    <div class="sub">작도 활동지 · 도구: <b>길이 옮기기</b> + <b>각 옮기기</b></div>
+  </header>
+
+  <div class="main">
+    <section class="board">
+      <div class="toolbar" id="toolbar">
+        <button class="tool" data-tool="point" title="점"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="currentColor"/></svg>점</button>
+        <button class="tool" data-tool="segment" title="선분"><svg viewBox="0 0 24 24"><path d="M5 18 19 6"/><circle cx="5" cy="18" r="2" fill="currentColor"/><circle cx="19" cy="6" r="2" fill="currentColor"/></svg>선분</button>
+        <button class="tool" data-tool="line" title="직선"><svg viewBox="0 0 24 24"><path d="M2 20 22 4"/><circle cx="8" cy="15.2" r="2" fill="currentColor"/><circle cx="16" cy="8.8" r="2" fill="currentColor"/></svg>직선</button>
+        <span class="sep"></span>
+        <button class="tool" data-tool="compass" title="컴퍼스 (두 점으로 길이 재기 → 중심)"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 7 6 20M12 7l6 13M8.5 14.5c2 1.3 5 1.3 7 0"/></svg>컴퍼스</button>
+        <button class="tool" data-tool="circle" title="원 (중심 → 지나는 점)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><path d="M12 12h8"/></svg>원</button>
+        <button class="tool" data-tool="intersect" title="교점"><svg viewBox="0 0 24 24"><path d="M3 19 21 5M3 5l18 14"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/></svg>교점</button>
+        <span class="sep"></span>
+        <button class="tool" data-tool="measure" title="길이 재기"><svg viewBox="0 0 24 24"><path d="M3 15 15 3l6 6L9 21zM8 10l2 2M11 7l2 2M14 4l2 2"/></svg>길이 재기</button>
+        <button class="tool" data-tool="erase" title="지우기"><svg viewBox="0 0 24 24"><path d="M4 16 13 7l6 6-6 6H8zM13 7l6 6"/></svg>지우기</button>
+        <span class="sep"></span>
+        <button class="tool ghost" id="undo" title="되돌리기"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h9a6 6 0 0 1 0 12h-3"/></svg>되돌리기</button>
+        <button class="tool ghost" id="reset" title="새 문제"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>새 문제</button>
+      </div>
+      <div class="canvas-wrap"><canvas id="c" aria-label="작도 캔버스"></canvas></div>
+      <div class="status"><span id="status">도구를 고르세요.</span><span id="coord"></span></div>
+    </section>
+
+    <aside class="panel">
+      <div class="goal">
+        <div class="eyebrow">목표</div>
+        <h2 class="goaltitle">강 건너 나무 <span>P</span>까지 짚라인!<br>줄은 몇 m짜리를 주문할까?</h2>
+        <svg class="scene" viewBox="0 0 260 96" aria-hidden="true">
+          <rect x="0" y="62" width="260" height="34" fill="#9bd27a"/>
+          <rect x="0" y="34" width="260" height="30" fill="#7cc2ee"/>
+          <path d="M0 42q10 -3 20 0t20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0" stroke="#4e9fd6" fill="none" stroke-width="1.5"/>
+          <path d="M0 54q10 -3 20 0t20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0" stroke="#4e9fd6" fill="none" stroke-width="1.5"/>
+          <rect x="0" y="0" width="260" height="34" fill="#b7e39b"/>
+          <rect x="214" y="18" width="6" height="18" fill="#8b5a2b"/><circle cx="217" cy="14" r="13" fill="#2e8b57"/>
+          <text x="232" y="12" font-size="12" font-weight="700" fill="#1d2733">P</text>
+          <path d="M40 66 L214 20" stroke="#ffffff" stroke-width="2" stroke-dasharray="4 3"/>
+          <rect x="112" y="30" width="36" height="16" rx="4" fill="#ffffff"/><text x="130" y="42" font-size="11" font-weight="700" fill="#2f6fed" text-anchor="middle">? m</text>
+          <path d="M40 66 l0 -14 M40 56 l-5 6 M40 56 l7 -6 M40 52 l-4 7 M40 52 l4 7" stroke="#1d2733" stroke-width="2.5" stroke-linecap="round" fill="none"/><circle cx="40" cy="48" r="4" fill="#f6cfa6"/>
+          <text x="30" y="88" font-size="11" font-weight="700" fill="#1d2733">A</text>
+          <path d="M100 68 l0 -12 M100 60 l-5 6 M100 60 l5 6 M100 56 l-5 3 M100 56 l5 3" stroke="#1d2733" stroke-width="2.5" stroke-linecap="round" fill="none"/><circle cx="100" cy="52" r="4" fill="#f6cfa6"/>
+          <text x="96" y="88" font-size="11" font-weight="700" fill="#1d2733">B</text>
+          <path d="M40 76 L100 76" stroke="#1d2733" stroke-width="1.5"/><text x="70" y="74" font-size="9" fill="#1d2733" text-anchor="middle">40 m</text>
+          <text x="160" y="80" font-size="10" fill="#1d2733">🚫 강 못 건넘</text>
+        </svg>
+        <div class="chips"><span>줄은 10 m 단위 판매</span><span>AB = 40 m</span><span>땅 위에서만 재기</span></div>
+      </div>
+      <div class="card">
+        <h2>작도 순서 <span class="prog" id="prog"></span></h2>
+        <ol class="steps" id="steps"></ol>
+      </div>
+      <div class="result" id="result">
+        <div>강을 건너지 않고 줄 길이를 알아냈어요!</div>
+        <div class="big" id="resultText"></div>
+        <div class="why">△ABP ≡ △CBP′ (ASA 합동) → AP = CP′</div>
+      </div>
+      <div class="card demo">
+        <h2>교사용</h2>
+        <div class="btnrow">
+          <button class="btn primary" id="demoNext">시범 ▶ 다음 단계</button>
+          <button class="btn" id="answer">정답 확인</button>
+        </div>
+        <div class="cap" id="demoCap">시범 버튼을 누르면 한 단계씩 작도가 그려져요.</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+// ---------- world (meters) ----------
+const X0=-90, YTOP=60, W0=180, H0=118;      // x: -90..90, y: 60..-58
+const RIVER_TOP=28;                           // river: 0 < y < 28, land: y < 0
+const canvas=document.getElementById('c'), ctx=canvas.getContext('2d');
+let s=5, dpr=1;
+const toS=p=>({x:(p.x-X0)*s, y:(YTOP-p.y)*s});
+const toW=(x,y)=>({x:x/s+X0, y:YTOP-y/s});
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+
+// ---------- state ----------
+let pts=[], objs=[], history=[], idc=1, P={x:-12,y:40}, found={C:false,P2:false}, demoStep=0, showAnswer=false;
+const LABELS=['H','I','J','K','M','N','Q','R','S','T','U','V','D','E','F','G','C'];
+const target=()=>({C:{x:40,y:0}, P2:{x:-P.x,y:-P.y}});
+const pt=id=>pts.find(p=>p.id===id);
+
+function init(randomize){
+  if(randomize) P={x:-22+Math.random()*16, y:36+Math.random()*10};
+  pts=[{id:idc++,x:-40,y:0,label:'A',fixed:true},{id:idc++,x:0,y:0,label:'B',fixed:true},{id:idc++,x:P.x,y:P.y,label:'P',fixed:true}];
+  objs=[]; history=[]; found={C:false,P2:false}; demoStep=0; showAnswer=false; pending=[]; curStep=-1;
+  document.getElementById('demoCap').textContent='시범 버튼을 누르면 한 단계씩 작도가 그려져요.';
+  document.getElementById('demoNext').textContent='시범 ▶ 다음 단계';
+  evaluate(); draw();
+}
+function snapshot(){ history.push(JSON.stringify({pts,objs,found})); if(history.length>80) history.shift(); }
+function undo(){ const h=history.pop(); if(!h) return; const o=JSON.parse(h); pts=o.pts; objs=o.objs; found=o.found; pending=[]; evaluate(); draw(); }
+
+function nextLabel(){ const used=new Set(pts.map(p=>p.label)); return LABELS.find(l=>!used.has(l))||'•'; }
+const onCircle=(o,w)=>Math.abs(dist(pt(o.c),w)-o.r)<0.6;
+function circleAt(lbl){ const c=L(lbl); if(!c) return null; return [...objs].reverse().find(o=>o.type==='circle'&&o.c===c.id)||null; }
+function contextLabel(w){
+  const T=target(), A=L('A'), B=L('B'), used=l=>pts.some(p=>p.label===l);
+  if(!used('P′') && dist(w,T.P2)<2) return 'P′';
+  if(!used('C') && dist(w,T.C)<1.5) return 'C';
+  const cA=circleAt('A'), cC=circleAt('C');
+  if(cA && onCircle(cA,w)){
+    if(!used('D') && Math.abs(w.y)<0.6 && w.x>A.x) return 'D';
+    const ux=P.x-A.x, uy=P.y-A.y; const cr=Math.abs(ux*(w.y-A.y)-uy*(w.x-A.x))/Math.hypot(ux,uy);
+    if(!used('E') && cr<0.8 && (w.x-A.x)*ux+(w.y-A.y)*uy>0) return 'E';
+  }
+  if(cC && onCircle(cC,w) && !used('F') && Math.abs(w.y)<0.6 && w.x<T.C.x) return 'F';
+  const E=L('E'); if(E && !used('G') && dist(w,{x:-E.x,y:-E.y})<1.5) return 'G';
+  return null;
+}
+function addPoint(w,kind){
+  const p={id:idc++,x:w.x,y:w.y,label:contextLabel(w)||nextLabel(),kind};
+  if(p.label==='P′') found.P2=true; if(p.label==='C') found.C=true;
+  pts.push(p); return p;
+}
+
+// ---------- geometry ----------
+function lineOf(o){ const A=pt(o.a),B=pt(o.b); return {x:A.x,y:A.y,dx:B.x-A.x,dy:B.y-A.y,t0:o.type==='line'?-Infinity:0,t1:o.type==='segment'?1:Infinity}; }
+const inR=(L,t)=>t>=L.t0-1e-9&&t<=L.t1+1e-9;
+function circleOf(o){ const C=pt(o.c); return {x:C.x,y:C.y,r:o.r}; }
+function iLL(L1,L2){ const den=L1.dx*L2.dy-L1.dy*L2.dx; if(Math.abs(den)<1e-9) return []; const rx=L2.x-L1.x, ry=L2.y-L1.y; const t=(rx*L2.dy-ry*L2.dx)/den, u=(rx*L1.dy-ry*L1.dx)/den; if(!inR(L1,t)||!inR(L2,u)) return []; return [{x:L1.x+L1.dx*t,y:L1.y+L1.dy*t}]; }
+function iLC(L,C){ const fx=L.x-C.x, fy=L.y-C.y; const a=L.dx*L.dx+L.dy*L.dy, b=2*(fx*L.dx+fy*L.dy), c=fx*fx+fy*fy-C.r*C.r; let d=b*b-4*a*c; if(d<0) return []; d=Math.sqrt(d); const out=[]; for(const t of [(-b-d)/(2*a),(-b+d)/(2*a)]) if(inR(L,t)) out.push({x:L.x+L.dx*t,y:L.y+L.dy*t}); return out; }
+function iCC(A,B){ const d=dist(A,B); if(d<1e-9||d>A.r+B.r+1e-9||d<Math.abs(A.r-B.r)-1e-9) return []; const a=(A.r*A.r-B.r*B.r+d*d)/(2*d); const h2=A.r*A.r-a*a; const h=Math.sqrt(Math.max(0,h2)); const mx=A.x+a*(B.x-A.x)/d, my=A.y+a*(B.y-A.y)/d; const ox=-(B.y-A.y)/d*h, oy=(B.x-A.x)/d*h; return h<1e-9?[{x:mx,y:my}]:[{x:mx+ox,y:my+oy},{x:mx-ox,y:my-oy}]; }
+function allIntersections(){
+  const g=objs.filter(o=>o.type!=='measure').map(o=>o.type==='circle'?{k:'c',g:circleOf(o)}:{k:'l',g:lineOf(o)});
+  const out=[];
+  for(let i=0;i<g.length;i++) for(let j=i+1;j<g.length;j++){
+    const a=g[i],b=g[j];
+    if(a.k==='l'&&b.k==='l') out.push(...iLL(a.g,b.g));
+    else if(a.k==='l'&&b.k==='c') out.push(...iLC(a.g,b.g));
+    else if(a.k==='c'&&b.k==='l') out.push(...iLC(b.g,a.g));
+    else out.push(...iCC(a.g,b.g));
+  }
+  return out;
+}
+function objDistPx(o,sp){ // screen-px distance from screen point to object
+  if(o.type==='circle'){ const C=toS(pt(o.c)); return Math.abs(dist(C,sp)-o.r*s); }
+  if(o.type==='measure') return Infinity;
+  const L=lineOf(o); const A=toS({x:L.x,y:L.y}); const dx=L.dx*s, dy=-L.dy*s; const len2=dx*dx+dy*dy; if(len2<1e-9) return Infinity;
+  let t=((sp.x-A.x)*dx+(sp.y-A.y)*dy)/len2; t=Math.max(L.t0,Math.min(L.t1,t)); return dist(sp,{x:A.x+dx*t,y:A.y+dy*t});
+}
+function projectOn(o,w){
+  if(o.type==='circle'){ const C=pt(o.c); const d=dist(C,w)||1; return {x:C.x+(w.x-C.x)/d*o.r,y:C.y+(w.y-C.y)/d*o.r}; }
+  const L=lineOf(o); const len2=L.dx*L.dx+L.dy*L.dy; let t=((w.x-L.x)*L.dx+(w.y-L.y)*L.dy)/len2; t=Math.max(L.t0,Math.min(L.t1,t)); return {x:L.x+L.dx*t,y:L.y+L.dy*t};
+}
+function nearestPoint(sp,tol=13){ let best=null,bd=tol; for(const p of pts){ const d=dist(toS(p),sp); if(d<bd){bd=d;best=p;} } return best; }
+function nearestIntersection(sp,tol=13){ let best=null,bd=tol; for(const q of allIntersections()){ const d=dist(toS(q),sp); if(d<bd){bd=d;best=q;} } return best; }
+function nearestObj(sp,tol=9){ let best=null,bd=tol; for(const o of objs){ const d=objDistPx(o,sp); if(d<bd){bd=d;best=o;} } return best; }
+function resolve(sp){ // what a click at screen point sp means
+  const p=nearestPoint(sp); if(p) return {kind:'pt',p};
+  const q=nearestIntersection(sp); if(q) return {kind:'int',w:q};
+  const o=nearestObj(sp); if(o) return {kind:'on',w:projectOn(o,toW(sp.x,sp.y))};
+  return {kind:'free',w:toW(sp.x,sp.y)};
+}
+function getOrCreate(sp){ const r=resolve(sp); if(r.kind==='pt') return r.p; return addPoint(r.w,r.kind); }
+
+// ---------- tools ----------
+let tool='point', pending=[], hover=null;
+const MSG={
+  point:['점: 캔버스를 클릭해 점을 찍어요 (선·원·교점에 자동으로 붙어요)'],
+  segment:['선분: 첫 번째 점을 클릭','선분: 두 번째 점을 클릭'],
+  line:['직선: 첫 번째 점을 클릭','직선: 두 번째 점을 클릭'],
+  compass:['컴퍼스: 길이를 잴 첫 번째 점','컴퍼스: 길이를 잴 두 번째 점','컴퍼스: 원의 중심이 될 점'],
+  circle:['원: 중심을 클릭','원: 지나는 점을 클릭'],
+  intersect:['교점: 두 도형이 만나는 곳을 클릭'],
+  measure:['길이 재기: 첫 번째 점','길이 재기: 두 번째 점'],
+  erase:['지우기: 지울 도형이나 점을 클릭']
+};
+function setTool(t){ tool=t; pending=[]; document.querySelectorAll('.tool[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===t)); status(); draw(); }
+function status(){ const m=MSG[tool]; document.getElementById('status').innerHTML='<b>'+m[Math.min(pending.length,m.length-1)].split(':')[0]+'</b>:'+m[Math.min(pending.length,m.length-1)].split(':').slice(1).join(':'); }
+
+function click(sp){
+  if(tool==='erase'){ const p=nearestPoint(sp); if(p&&!p.fixed){ snapshot(); objs=objs.filter(o=>o.a!==p.id&&o.b!==p.id&&o.c!==p.id); pts=pts.filter(q=>q!==p); if(p.label==='C') found.C=false; if(p.label==='P′') found.P2=false; } else { const o=nearestObj(sp); if(o){ snapshot(); objs=objs.filter(x=>x!==o); } } evaluate(); draw(); return; }
+  if(tool==='intersect'){ const q=nearestIntersection(sp,16); if(q&&!nearestPoint(sp,6)){ snapshot(); addPoint(q,'int'); evaluate(); draw(); } return; }
+  snapshot();
+  const p=getOrCreate(sp);
+  if(tool==='point'){ evaluate(); draw(); return; }
+  if(pending.length && pending[pending.length-1]===p.id && tool!=='compass'){ history.pop(); return; }
+  pending.push(p.id);
+  if(tool==='segment'||tool==='line'){ if(pending.length===2){ objs.push({id:idc++,type:tool,a:pending[0],b:pending[1]}); pending=[]; } }
+  else if(tool==='circle'){ if(pending.length===2){ objs.push({id:idc++,type:'circle',c:pending[0],r:dist(pt(pending[0]),pt(pending[1])),from:pending[1]}); pending=[]; } }
+  else if(tool==='compass'){ if(pending.length===3){ objs.push({id:idc++,type:'circle',c:pending[2],r:dist(pt(pending[0]),pt(pending[1])),ra:pending[0],rb:pending[1]}); pending=[]; } }
+  else if(tool==='measure'){ if(pending.length===2){ objs.push({id:idc++,type:'measure',a:pending[0],b:pending[1]}); pending=[]; } }
+  status(); evaluate(); draw();
+}
+
+// ---------- steps & checks ----------
+const STEPS=[
+ {title:'시선과 기준선 긋기',tool:'segment',desc:'',
+  todo:[['선분','A','P','→ 시선'],['직선','A','B','→ 직선'],['직선','P','B','→ 직선']]},
+ {title:'길이 옮기기 · BC = AB',tool:'compass',desc:'',
+  todo:[['컴퍼스','A','B','중심 B','→ 원'],['교점','원 ∩ 직선AB (B 오른쪽)','→ C']]},
+ {title:'각 옮기기 ① · ∠PAB 뜨기',tool:'circle',desc:'',
+  todo:[['원','중심 A','A·B 사이 아무 곳','→ 작은 원'],['교점','원 ∩ 직선AB (B 쪽)','→ D'],['교점','원 ∩ 시선AP','→ E']]},
+ {title:'각 옮기기 ② · C에 같은 원',tool:'compass',desc:'',
+  todo:[['컴퍼스','A','D','중심 C','→ 같은 원'],['교점','원 ∩ 직선AB (B 쪽)','→ F']]},
+ {title:'각 옮기기 ③ · 벌어진 폭 DE 옮기기',tool:'compass',desc:'',
+  todo:[['컴퍼스','D','E','중심 F','→ 원'],['교점','두 원 ∩ (땅 쪽)','→ G']]},
+ {title:'P′ 찾기 · ∠BCP′ = ∠BAP',tool:'line',desc:'',
+  todo:[['직선','C','G','→ 직선'],['교점','직선CG ∩ 직선PB','→ P′']]},
+ {title:'CP′ 길이 재기 = 짚라인 줄 길이',tool:'measure',desc:'△ABP ≡ △CBP′ → CP′ = AP',
+  todo:[['길이 재기','C','P′','→ AP']]}
+];
+let curStep=-1;
+function stepsDone(){
+  const T=target(), near=(p,t,tol)=>p&&dist(p,t)<tol;
+  const A=L('A'),B=L('B'),Pp=L('P'),C=L('C'),D=L('D'),E=L('E'),F=L('F'),G=L('G'),Q=L('P′');
+  const hasLine=(u,v)=>u&&v&&objs.some(o=>o.type==='line'&&((o.a===u.id&&o.b===v.id)||(o.a===v.id&&o.b===u.id)));
+  const cA=circleAt('A'), cC=circleAt('C'), cF=circleAt('F');
+  const d=[];
+  const hasSeg=(u,v)=>u&&v&&objs.some(o=>(o.type==='segment'||o.type==='line')&&((o.a===u.id&&o.b===v.id)||(o.a===v.id&&o.b===u.id)));
+  d[0]=hasLine(A,B)&&hasLine(Pp,B)&&hasSeg(A,Pp);
+  d[1]=!!C;
+  d[2]=!!(cA&&D&&E);
+  d[3]=!!(cC&&cA&&Math.abs(cC.r-cA.r)<0.6&&F);
+  d[4]=!!(cF&&G);
+  d[5]=!!Q;
+  let m=null; for(const o of objs) if(o.type==='measure'){ const a=pt(o.a),b=pt(o.b); if((near(a,T.C,1.5)&&near(b,T.P2,2))||(near(b,T.C,1.5)&&near(a,T.P2,2))) m=o; }
+  d[6]=!!m; return {d,m};
+}
+function renderSteps(d){
+  const ol=document.getElementById('steps'); ol.innerHTML='';
+  STEPS.forEach((st,i)=>{
+    const li=document.createElement('li'); li.className='step'+(d[i]?' done':'')+(i===curStep?' cur':'');
+    const todo=st.todo.map(r=>'<div class="row"><span class="tl">'+r[0]+'</span>'+r.slice(1).map((x,k)=>(x.startsWith('→')?'<span class="note">'+x+'</span>':(k>0?'<span class="arrow">→</span>':'')+'<span class="pt">'+x+'</span>')).join('')+'</div>').join('');
+    li.innerHTML='<span class="n">'+(d[i]?'✓':(i+1))+'</span><span class="t">'+st.title+'</span><div class="body"><div class="desc">'+st.desc+'</div><div class="todo">'+todo+'</div></div>';
+    li.addEventListener('click',()=>{ if(i!==curStep){ curStep=i; renderSteps(stepsDone().d); } });
+    ol.appendChild(li);
+  });
+  document.getElementById('prog').textContent=d.filter(Boolean).length+' / '+STEPS.length;
+}
+function evaluate(){
+  const {d,m}=stepsDone();
+  const next=d.findIndex(x=>!x); const nc=next<0?STEPS.length-1:next;
+  if(nc!==curStep){ curStep=nc; if(tool!==STEPS[nc].tool && next>=0) setToolQuiet(STEPS[nc].tool); }
+  renderSteps(d);
+  const res=document.getElementById('result'); res.classList.toggle('show',d[6]);
+  if(d[6]){ const a=pt(m.a),b=pt(m.b); document.getElementById('resultText').textContent='CP′ = AP = '+dist(a,b).toFixed(1)+' m  →  '+(Math.ceil(dist(a,b)/10)*10)+' m짜리 주문!'; }
+}
+function setToolQuiet(t){ tool=t; pending=[]; document.querySelectorAll('.tool[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===t)); status(); }
+
+// ---------- demo (teacher) ----------
+const DEMO=[
+  ['시선 AP(선분), 직선 AB, 직선 PB를 긋습니다.', ()=>{ const A=L('A'),B=L('B'),Pp=L('P'); objs.push({id:idc++,type:'segment',a:A.id,b:Pp.id},{id:idc++,type:'line',a:A.id,b:B.id},{id:idc++,type:'line',a:Pp.id,b:B.id}); }],
+  ['길이 옮기기: AB를 재서 B를 중심으로 원을 그리면 직선 AB와 만나는 점 C. BC = AB.', ()=>{ const A=L('A'),B=L('B'); objs.push({id:idc++,type:'circle',c:B.id,r:40,ra:A.id,rb:B.id}); addPoint({x:40,y:0},'int'); }],
+  ['각 옮기기 ①: A를 중심으로 원을 그려 D(직선 AB 위), E(선 AP 위)를 잡습니다.', ()=>{ const A=L('A'); objs.push({id:idc++,type:'circle',c:A.id,r:15}); addPoint({x:-25,y:0},'int'); const u=unit({x:P.x-A.x,y:P.y-A.y}); addPoint({x:A.x+u.x*15,y:A.y+u.y*15},'int'); }],
+  ['각 옮기기 ②: C에도 같은 크기의 원을 그려 F를 잡습니다.', ()=>{ const A=L('A'),C=L('C'),D=L('D'); objs.push({id:idc++,type:'circle',c:C.id,r:15,ra:A.id,rb:D.id}); addPoint({x:25,y:0},'int'); }],
+  ['각 옮기기 ③: F에서 DE 길이만큼 재면 두 원이 만나는 점 G.', ()=>{ const D=L('D'),E=L('E'),F=L('F'); objs.push({id:idc++,type:'circle',c:F.id,r:dist(D,E),ra:D.id,rb:E.id}); addPoint({x:-E.x,y:-E.y},'int'); }],
+  ['직선 CG가 직선 PB와 만나는 점이 P′. ∠BCP′ = ∠BAP.', ()=>{ const C=L('C'),G=L('G'); objs.push({id:idc++,type:'line',a:C.id,b:G.id}); addPoint({x:-P.x,y:-P.y},'int'); }],
+  ['길이 재기: CP′가 바로 AP! △ABP ≡ △CBP′ (ASA).', ()=>{ const C=L('C'),Q=L('P′'); objs.push({id:idc++,type:'measure',a:C.id,b:Q.id}); }]
+];
+const L=l=>pts.find(p=>p.label===l);
+const unit=v=>{const d=Math.hypot(v.x,v.y)||1;return {x:v.x/d,y:v.y/d};};
+document.getElementById('demoNext').onclick=()=>{
+  if(demoStep===0){ init(false); }
+  if(demoStep>=DEMO.length) return;
+  snapshot(); DEMO[demoStep][1](); document.getElementById('demoCap').textContent=(demoStep+1)+'/'+DEMO.length+' · '+DEMO[demoStep][0];
+  demoStep++; if(demoStep>=DEMO.length) document.getElementById('demoNext').textContent='시범 끝 · 새 문제로 초기화';
+  evaluate(); draw();
+};
+document.getElementById('answer').onclick=()=>{ showAnswer=!showAnswer; draw(); };
+
+// ---------- drawing ----------
+function resize(){ const r=canvas.parentElement.getBoundingClientRect(); dpr=window.devicePixelRatio||1; canvas.width=Math.round(r.width*dpr); canvas.height=Math.round(r.height*dpr); s=r.width/W0; draw(); }
+function drawTree(w,big){ const p=toS(w); const k=big?1.6:1; ctx.fillStyle='#8b5a2b'; ctx.fillRect(p.x-2*k,p.y-2*k,4*k,10*k); ctx.fillStyle=big?'#2e8b57':'#5aa06a'; ctx.beginPath(); ctx.arc(p.x,p.y-8*k,8*k,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(p.x-5*k,p.y-3*k,6*k,0,Math.PI*2); ctx.arc(p.x+5*k,p.y-3*k,6*k,0,Math.PI*2); ctx.fill(); }
+function drawPerson(w,dx,c,pose){ const p=toS(w); const x=p.x+dx,y=p.y; ctx.lineCap='round'; ctx.lineWidth=3; ctx.strokeStyle=c; ctx.beginPath(); ctx.moveTo(x,y-16); ctx.lineTo(x,y-5); ctx.stroke(); /* legs */ ctx.beginPath(); ctx.moveTo(x,y-5); ctx.lineTo(x-4,y+1); ctx.moveTo(x,y-5); ctx.lineTo(x+4,y+1); ctx.stroke(); /* arms */ ctx.beginPath(); if(pose==='point'){ ctx.moveTo(x,y-13); ctx.lineTo(x-6,y-8); ctx.moveTo(x,y-13); ctx.lineTo(x+9,y-20); } else { ctx.moveTo(x,y-13); ctx.lineTo(x-6,y-8); ctx.moveTo(x,y-13); ctx.lineTo(x+6,y-9); } ctx.stroke(); /* head */ ctx.fillStyle='#f6cfa6'; ctx.beginPath(); ctx.arc(x,y-21,4.5,0,Math.PI*2); ctx.fill(); ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y-23,4.6,Math.PI,Math.PI*2); ctx.fill(); }
+function drawBubble(w,dx,dy,text){ const p=toS(w); ctx.font='500 11px '+css('--font'); const tw=ctx.measureText(text).width+12; const x=p.x+dx,y=p.y+dy; ctx.fillStyle=css('--panel'); ctx.strokeStyle=css('--line'); ctx.lineWidth=1; ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(x,y-20,tw,20,6); else ctx.rect(x,y-20,tw,20); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x+8,y); ctx.lineTo(x+4,y+6); ctx.lineTo(x+14,y); ctx.fill(); ctx.fillStyle=css('--fg'); ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(text,x+6,y-10); }
+function drawTent(w){ const p=toS(w); ctx.fillStyle='#f0a24b'; ctx.beginPath(); ctx.moveTo(p.x-16,p.y); ctx.lineTo(p.x,p.y-20); ctx.lineTo(p.x+16,p.y); ctx.closePath(); ctx.fill(); ctx.fillStyle='#c97a24'; ctx.beginPath(); ctx.moveTo(p.x-5,p.y); ctx.lineTo(p.x,p.y-12); ctx.lineTo(p.x+5,p.y); ctx.closePath(); ctx.fill(); }
+function drawSign(w,text){ const p=toS(w); ctx.strokeStyle='#8b5a2b'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x,p.y-18); ctx.stroke(); ctx.font='700 9.5px '+css('--font'); const tw=ctx.measureText(text).width+10; ctx.fillStyle='#fff3c4'; ctx.strokeStyle='#b8862b'; ctx.lineWidth=1; ctx.fillRect(p.x-tw/2,p.y-30,tw,14); ctx.strokeRect(p.x-tw/2,p.y-30,tw,14); ctx.fillStyle='#7a4a12'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,p.x,p.y-23); }
+function drawFlag(w){ const p=toS(w); ctx.strokeStyle='#6b4a2a'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x,p.y-16); ctx.stroke(); ctx.fillStyle='#e8402a'; ctx.beginPath(); ctx.moveTo(p.x,p.y-16); ctx.lineTo(p.x+11,p.y-12); ctx.lineTo(p.x,p.y-8); ctx.closePath(); ctx.fill(); }
+function label(text,w,dx,dy,color,bold){ const p=toS(w); ctx.font=(bold?'700 ':'500 ')+'13px '+css('--font'); ctx.fillStyle=color; ctx.textAlign='left'; ctx.textBaseline='middle'; const tw=ctx.measureText(text).width; ctx.fillStyle=css('--panel'); ctx.globalAlpha=.75; ctx.fillRect(p.x+dx-3,p.y+dy-9,tw+6,18); ctx.globalAlpha=1; ctx.fillStyle=color; ctx.fillText(text,p.x+dx,p.y+dy); }
+function drawLineObj(L,color,width,dash){ const a=toS({x:L.x-L.dx*1000,y:L.y-L.dy*1000}); let t0=L.t0,t1=L.t1; if(t0===-Infinity)t0=-1000; if(t1===Infinity)t1=1000; const p0=toS({x:L.x+L.dx*t0,y:L.y+L.dy*t0}),p1=toS({x:L.x+L.dx*t1,y:L.y+L.dy*t1}); ctx.strokeStyle=color; ctx.lineWidth=width; ctx.setLineDash(dash||[]); ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke(); ctx.setLineDash([]); }
+function drawCircle(c,r,color,width,dash){ const p=toS(c); ctx.strokeStyle=color; ctx.lineWidth=width; ctx.setLineDash(dash||[]); ctx.beginPath(); ctx.arc(p.x,p.y,r*s,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]); }
+function drawPoint(p,style){ const q=toS(p); ctx.beginPath(); ctx.arc(q.x,q.y,style==='fixed'?5.5:4.5,0,Math.PI*2); ctx.fillStyle=style==='fixed'?css('--fg'):css('--accent'); ctx.fill(); ctx.lineWidth=1.8; ctx.strokeStyle=css('--panel'); ctx.stroke(); if(style==='int'){ ctx.beginPath(); ctx.arc(q.x,q.y,1.6,0,Math.PI*2); ctx.fillStyle=css('--panel'); ctx.fill(); } }
+
+function draw(){
+  const W=canvas.width/dpr,H=canvas.height/dpr; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+  const y0=toS({x:0,y:0}).y, y1=toS({x:0,y:RIVER_TOP}).y;
+  ctx.fillStyle=css('--land'); ctx.fillRect(0,y0,W,H-y0);
+  ctx.fillStyle=css('--land-far'); ctx.fillRect(0,0,W,y1);
+  ctx.fillStyle=css('--water'); ctx.fillRect(0,y1,W,y0-y1);
+  ctx.strokeStyle=css('--water-deep'); ctx.lineWidth=1.2; for(let k=0;k<5;k++){ const yy=y1+(y0-y1)*(k+1)/6; ctx.beginPath(); for(let x=0;x<=W;x+=6) ctx.lineTo(x,yy+Math.sin((x/18)+k)*2.2); ctx.stroke(); }
+  // grid 10 m
+  ctx.strokeStyle=css('--grid'); ctx.lineWidth=1; for(let x=-90;x<=90;x+=10){ const q=toS({x,y:0}); ctx.beginPath(); ctx.moveTo(q.x,0); ctx.lineTo(q.x,H); ctx.stroke(); } for(let y=-50;y<=60;y+=10){ const q=toS({x:0,y}); ctx.beginPath(); ctx.moveTo(0,q.y); ctx.lineTo(W,q.y); ctx.stroke(); }
+  // shore line
+  ctx.strokeStyle=css('--muted'); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(0,y0); ctx.lineTo(W,y0); ctx.stroke();
+  // scenery
+  for(const t of [[-72,47],[-54,54],[22,50],[48,45],[72,54],[82,42]]) drawTree({x:t[0],y:t[1]},false);
+  // scale bar
+  { const a=toS({x:-86,y:-52}), b=toS({x:-76,y:-52}); ctx.strokeStyle=css('--fg'); ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.moveTo(a.x,a.y-4); ctx.lineTo(a.x,a.y+4); ctx.moveTo(b.x,b.y-4); ctx.lineTo(b.x,b.y+4); ctx.stroke(); ctx.font='500 11px '+css('--font'); ctx.fillStyle=css('--fg'); ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText('10 m',b.x+6,b.y); }
+  // objects
+  for(const o of objs){ if(o.type==='circle') drawCircle(pt(o.c),o.r,css('--circle'),1.4); }
+  for(const o of objs){ if(o.type==='line'||o.type==='segment') drawLineObj(lineOf(o),css('--ink'),1.8); }
+  for(const o of objs){ if(o.type==='measure'){ const a=pt(o.a),b=pt(o.b); drawLineObj({x:a.x,y:a.y,dx:b.x-a.x,dy:b.y-a.y,t0:0,t1:1},css('--ok'),2.2,[6,4]); label(dist(a,b).toFixed(1)+' m',{x:(a.x+b.x)/2,y:(a.y+b.y)/2},8,-10,css('--ok'),true); } }
+  // answer overlay
+  if(showAnswer){ const A=L('A'); drawLineObj({x:A.x,y:A.y,dx:P.x-A.x,dy:P.y-A.y,t0:0,t1:1},css('--warn'),2,[4,4]); label('AP = '+dist(A,P).toFixed(1)+' m',{x:(A.x+P.x)/2,y:(A.y+P.y)/2},10,-12,css('--warn'),true); }
+  // preview
+  if(hover){
+    const r=resolve(hover); const hw=r.kind==='pt'?r.p:r.w; const hs=toS(hw);
+    if(tool!=='erase'){ ctx.beginPath(); ctx.arc(hs.x,hs.y,r.kind==='free'?5:8,0,Math.PI*2); ctx.strokeStyle=css('--accent'); ctx.lineWidth=1.5; ctx.setLineDash(r.kind==='free'?[]:[3,3]); ctx.stroke(); ctx.setLineDash([]); }
+    if(tool==='intersect'){ const q=nearestIntersection(hover,16); if(q){ const qs=toS(q); ctx.beginPath(); ctx.arc(qs.x,qs.y,8,0,Math.PI*2); ctx.strokeStyle=css('--warn'); ctx.lineWidth=2; ctx.stroke(); } }
+    if(tool==='erase'){ const p=nearestPoint(hover); if(p&&!p.fixed){ ctx.beginPath(); ctx.arc(toS(p).x,toS(p).y,9,0,Math.PI*2); ctx.strokeStyle=css('--warn'); ctx.lineWidth=2; ctx.stroke(); } else { const o=nearestObj(hover); if(o){ if(o.type==='circle') drawCircle(pt(o.c),o.r,css('--warn'),3); else if(o.type!=='measure') drawLineObj(lineOf(o),css('--warn'),3.5); } } }
+    if((tool==='segment'||tool==='line'||tool==='measure')&&pending.length===1){ const a=pt(pending[0]); drawLineObj({x:a.x,y:a.y,dx:hw.x-a.x,dy:hw.y-a.y,t0:tool==='line'?-Infinity:0,t1:tool==='line'?Infinity:1},css('--accent'),1.5,[5,4]); }
+    if(tool==='circle'&&pending.length===1){ const c=pt(pending[0]); drawCircle(c,dist(c,hw),css('--circle'),1.5,[5,4]); }
+    if(tool==='compass'&&pending.length===1){ const a=pt(pending[0]); drawLineObj({x:a.x,y:a.y,dx:hw.x-a.x,dy:hw.y-a.y,t0:0,t1:1},css('--circle'),1.5,[3,3]); }
+    if(tool==='compass'&&pending.length===2){ const r2=dist(pt(pending[0]),pt(pending[1])); drawCircle(hw,r2,css('--circle'),1.5,[5,4]); }
+  }
+  // fixed scenery markers
+  drawFlag({x:-40,y:0}); drawFlag({x:0,y:0}); drawTree(P,true);
+  drawTent({x:-72,y:-12}); drawTent({x:-58,y:-18}); drawSign({x:62,y:-6},'급류 · 수영 금지');
+  drawPerson({x:-40,y:-3},-14,'#2f6fed','point'); drawPerson({x:0,y:-3},14,'#d9542b','hold');
+  drawBubble({x:-40,y:-3},-6,-32,'저 나무까지 몇 m지?'); drawBubble({x:0,y:-3},20,-32,'줄자가 강을 못 건너…');
+  label('AB = 40 m',{x:-20,y:0},-28,14,css('--muted'),false);
+  // points
+  for(const p of pts){ drawPoint(p,p.fixed?'fixed':(p.kind==='int'?'int':'pt')); label(p.label,p,8,p.fixed&&p.label!=='P'?10:-11,p.label==='P′'?css('--ok'):css('--fg'),p.fixed||p.label==='P′'||p.label==='C'); }
+  // pending highlight
+  for(const id of pending){ const q=toS(pt(id)); ctx.beginPath(); ctx.arc(q.x,q.y,8,0,Math.PI*2); ctx.strokeStyle=css('--accent'); ctx.lineWidth=2; ctx.stroke(); }
+}
+
+// ---------- events ----------
+function spOf(e){ const r=canvas.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
+canvas.addEventListener('pointermove',e=>{ hover=spOf(e); const w=toW(hover.x,hover.y); document.getElementById('coord').textContent='('+w.x.toFixed(0)+', '+w.y.toFixed(0)+')'; draw(); });
+canvas.addEventListener('pointerleave',()=>{ hover=null; draw(); });
+canvas.addEventListener('pointerdown',e=>{ e.preventDefault(); hover=spOf(e); click(hover); });
+document.querySelectorAll('.tool[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+document.getElementById('undo').onclick=undo;
+document.getElementById('reset').onclick=()=>init(true);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ pending=[]; status(); draw(); } if((e.ctrlKey||e.metaKey)&&e.key==='z'){ e.preventDefault(); undo(); } });
+window.addEventListener('resize',resize);
+if(window.matchMedia){ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw); }
+new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+init(false); resize();
+})();
+</script>
